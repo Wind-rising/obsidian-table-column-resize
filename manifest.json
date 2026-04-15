@@ -1,0 +1,10 @@
+{
+  "id": "table-column-resize",
+  "name": "Table Column Resize",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "Drag table column borders to manually resize column widths. Widths persist across sessions.",
+  "author": "lolieatapple",
+  "authorUrl": "https://github.com/lolieatapple",
+  "isDesktopOnly": false
+}
