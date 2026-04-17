@@ -25,7 +25,7 @@ export default class TableColumnResizePlugin extends Plugin {
     // Flush any pending save
     if (this.saveTimeout !== null) {
       window.clearTimeout(this.saveTimeout);
-      this.saveSettings();
+      void this.saveSettings();
     }
 
     // Clean up body class if left over
@@ -48,7 +48,7 @@ export default class TableColumnResizePlugin extends Plugin {
   debouncedSave() {
     if (this.saveTimeout !== null) window.clearTimeout(this.saveTimeout);
     this.saveTimeout = window.setTimeout(() => {
-      this.saveSettings();
+      void this.saveSettings();
       this.saveTimeout = null;
     }, 500) as unknown as number;
   }

@@ -1,8 +1,11 @@
 /* Table Column Resize plugin styles */
 
-/* Ensure resized tables use fixed layout */
+/* Ensure resized tables use fixed layout so col/th widths are honored.
+   !important is required to beat Obsidian core / theme rules that set
+   table-layout: auto with high specificity. */
 table[data-tcr] {
-  table-layout: fixed;
+  table-layout: fixed !important;
+  width: 100% !important;
 }
 
 /* Drag handle: positioned at the right edge of each header cell */

@@ -42,8 +42,8 @@ export function setupTableResize(
   const fingerprint = tableFingerprint(headerCells);
   const fileKey = `${filePath}::${fingerprint}`;
 
-  // Ensure table-layout: fixed so widths are respected
-  table.style.tableLayout = "fixed";
+  // table-layout: fixed and width: 100% are applied via styles.css (with
+  // !important) on the [data-tcr] selector — avoids inline styles.
 
   // Create or find <colgroup>
   let colgroup = table.querySelector("colgroup");
@@ -59,13 +59,23 @@ export function setupTableResize(
 
   const cols = colgroup.querySelectorAll("col");
 
+  // Helper: write width to BOTH the <col> and the header <th>. Some
+  // Obsidian/theme CSS ignores <col> widths; writing the th directly
+  // is the reliable path in table-layout: fixed mode.
+  const applyWidth = (i: number, widthPx: number) => {
+    (cols[i] as HTMLElement).style.setProperty("width", `${widthPx}px`, "important");
+    (headerCells[i] as HTMLElement).style.setProperty("width", `${widthPx}px`, "important");
+    (headerCells[i] as HTMLElement).style.setProperty("min-width", `${widthPx}px`, "important");
+    (headerCells[i] as HTMLElement).style.setProperty("max-width", `${widthPx}px`, "important");
+  };
+
   // Restore saved widths
   let hasSavedWidths = false;
   for (let i = 0; i < colCount; i++) {
     const key = `${fileKey}::${i}`;
     const saved = plugin.settings.columnWidths[key];
     if (saved !== undefined) {
-      (cols[i] as HTMLElement).style.width = `${saved}px`;
+      applyWidth(i, saved);
       hasSavedWidths = true;
     }
   }
@@ -75,23 +85,20 @@ export function setupTableResize(
     for (let i = 0; i < colCount; i++) {
       const cell = headerCells[i] as HTMLElement;
       const w = cell.getBoundingClientRect().width;
-      if (w > 0) {
-        (cols[i] as HTMLElement).style.width = `${w}px`;
-      }
+      if (w > 0) applyWidth(i, w);
     }
   }
 
   // Add drag handles to header cells
+  // (th position:relative and overflow:visible come from styles.css)
   for (let i = 0; i < colCount; i++) {
     const th = headerCells[i] as HTMLElement;
-    th.style.position = "relative";
-    th.style.overflow = "visible";
 
     const handle = document.createElement("div");
     handle.className = "tcr-handle";
     th.appendChild(handle);
 
-    attachDragBehavior(plugin, handle, cols, i, fileKey, colCount);
+    attachDragBehavior(plugin, handle, cols, headerCells, i, fileKey, colCount, applyWidth);
   }
 }
 
@@ -99,38 +106,42 @@ function attachDragBehavior(
   plugin: TableColumnResizePlugin,
   handle: HTMLElement,
   cols: NodeListOf<Element>,
+  headerCells: NodeListOf<Element>,
   colIndex: number,
   fileKey: string,
-  colCount: number
+  colCount: number,
+  applyWidth: (i: number, widthPx: number) => void
 ) {
-  handle.addEventListener("pointerdown", (e: PointerEvent) => {
+  const onPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    // Block CM6 and Obsidian from stealing this as a text-selection / cell-focus drag.
     e.preventDefault();
     e.stopPropagation();
-    handle.setPointerCapture(e.pointerId);
+    e.stopImmediatePropagation();
 
     const startX = e.clientX;
-    const col = cols[colIndex] as HTMLElement;
-    const startWidth =
-      parseFloat(col.style.width) || col.getBoundingClientRect().width;
+    const th = headerCells[colIndex] as HTMLElement;
+    const startWidth = th.getBoundingClientRect().width;
 
     handle.classList.add("tcr-dragging");
     document.body.classList.add("tcr-resizing");
 
     const onMove = (ev: PointerEvent) => {
+      ev.preventDefault();
       const delta = ev.clientX - startX;
       const newWidth = Math.max(
         plugin.settings.minColumnWidth,
         startWidth + delta
       );
-      col.style.width = `${newWidth}px`;
+      applyWidth(colIndex, newWidth);
     };
 
     const onUp = () => {
       handle.classList.remove("tcr-dragging");
       document.body.classList.remove("tcr-resizing");
-      handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
-      handle.removeEventListener("pointercancel", onUp);
+      document.removeEventListener("pointermove", onMove, true);
+      document.removeEventListener("pointerup", onUp, true);
+      document.removeEventListener("pointercancel", onUp, true);
 
       // Persist all column widths
       for (let i = 0; i < colCount; i++) {
@@ -143,8 +154,15 @@ function attachDragBehavior(
       plugin.debouncedSave();
     };
 
-    handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
-    handle.addEventListener("pointercancel", onUp);
-  });
+    // Document-level listeners so the drag survives if CM6 re-renders
+    // the table mid-drag (which would destroy any handle-bound listener).
+    document.addEventListener("pointermove", onMove, true);
+    document.addEventListener("pointerup", onUp, true);
+    document.addEventListener("pointercancel", onUp, true);
+  };
+
+  handle.addEventListener("pointerdown", onPointerDown, true);
+  handle.addEventListener("mousedown", (e: MouseEvent) => {
+    e.stopPropagation();
+  }, true);
 }

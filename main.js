@@ -54,7 +54,6 @@ function setupTableResize(plugin, table, filePath) {
     return;
   const fingerprint = tableFingerprint(headerCells);
   const fileKey = `${filePath}::${fingerprint}`;
-  table.style.tableLayout = "fixed";
   let colgroup = table.querySelector("colgroup");
   if (!colgroup) {
     colgroup = document.createElement("colgroup");
@@ -64,12 +63,18 @@ function setupTableResize(plugin, table, filePath) {
     colgroup.appendChild(document.createElement("col"));
   }
   const cols = colgroup.querySelectorAll("col");
+  const applyWidth = (i, widthPx) => {
+    cols[i].style.setProperty("width", `${widthPx}px`, "important");
+    headerCells[i].style.setProperty("width", `${widthPx}px`, "important");
+    headerCells[i].style.setProperty("min-width", `${widthPx}px`, "important");
+    headerCells[i].style.setProperty("max-width", `${widthPx}px`, "important");
+  };
   let hasSavedWidths = false;
   for (let i = 0; i < colCount; i++) {
     const key = `${fileKey}::${i}`;
     const saved = plugin.settings.columnWidths[key];
     if (saved !== void 0) {
-      cols[i].style.width = `${saved}px`;
+      applyWidth(i, saved);
       hasSavedWidths = true;
     }
   }
@@ -77,45 +82,45 @@ function setupTableResize(plugin, table, filePath) {
     for (let i = 0; i < colCount; i++) {
       const cell = headerCells[i];
       const w = cell.getBoundingClientRect().width;
-      if (w > 0) {
-        cols[i].style.width = `${w}px`;
-      }
+      if (w > 0)
+        applyWidth(i, w);
     }
   }
   for (let i = 0; i < colCount; i++) {
     const th = headerCells[i];
-    th.style.position = "relative";
-    th.style.overflow = "visible";
     const handle = document.createElement("div");
     handle.className = "tcr-handle";
     th.appendChild(handle);
-    attachDragBehavior(plugin, handle, cols, i, fileKey, colCount);
+    attachDragBehavior(plugin, handle, cols, headerCells, i, fileKey, colCount, applyWidth);
   }
 }
-function attachDragBehavior(plugin, handle, cols, colIndex, fileKey, colCount) {
-  handle.addEventListener("pointerdown", (e) => {
+function attachDragBehavior(plugin, handle, cols, headerCells, colIndex, fileKey, colCount, applyWidth) {
+  const onPointerDown = (e) => {
+    if (e.button !== 0)
+      return;
     e.preventDefault();
     e.stopPropagation();
-    handle.setPointerCapture(e.pointerId);
+    e.stopImmediatePropagation();
     const startX = e.clientX;
-    const col = cols[colIndex];
-    const startWidth = parseFloat(col.style.width) || col.getBoundingClientRect().width;
+    const th = headerCells[colIndex];
+    const startWidth = th.getBoundingClientRect().width;
     handle.classList.add("tcr-dragging");
     document.body.classList.add("tcr-resizing");
     const onMove = (ev) => {
+      ev.preventDefault();
       const delta = ev.clientX - startX;
       const newWidth = Math.max(
         plugin.settings.minColumnWidth,
         startWidth + delta
       );
-      col.style.width = `${newWidth}px`;
+      applyWidth(colIndex, newWidth);
     };
     const onUp = () => {
       handle.classList.remove("tcr-dragging");
       document.body.classList.remove("tcr-resizing");
-      handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
-      handle.removeEventListener("pointercancel", onUp);
+      document.removeEventListener("pointermove", onMove, true);
+      document.removeEventListener("pointerup", onUp, true);
+      document.removeEventListener("pointercancel", onUp, true);
       for (let i = 0; i < colCount; i++) {
         const c = cols[i];
         const w = parseFloat(c.style.width);
@@ -125,10 +130,14 @@ function attachDragBehavior(plugin, handle, cols, colIndex, fileKey, colCount) {
       }
       plugin.debouncedSave();
     };
-    handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
-    handle.addEventListener("pointercancel", onUp);
-  });
+    document.addEventListener("pointermove", onMove, true);
+    document.addEventListener("pointerup", onUp, true);
+    document.addEventListener("pointercancel", onUp, true);
+  };
+  handle.addEventListener("pointerdown", onPointerDown, true);
+  handle.addEventListener("mousedown", (e) => {
+    e.stopPropagation();
+  }, true);
 }
 
 // src/reading-view.ts
@@ -220,7 +229,7 @@ var TableColumnResizePlugin = class extends import_obsidian2.Plugin {
   onunload() {
     if (this.saveTimeout !== null) {
       window.clearTimeout(this.saveTimeout);
-      this.saveSettings();
+      void this.saveSettings();
     }
     document.body.classList.remove("tcr-resizing");
   }
@@ -240,7 +249,7 @@ var TableColumnResizePlugin = class extends import_obsidian2.Plugin {
     if (this.saveTimeout !== null)
       window.clearTimeout(this.saveTimeout);
     this.saveTimeout = window.setTimeout(() => {
-      this.saveSettings();
+      void this.saveSettings();
       this.saveTimeout = null;
     }, 500);
   }

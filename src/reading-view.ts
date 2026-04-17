@@ -13,6 +13,6 @@ export const tableResizePostProcessor =
     if (tables.length === 0) return;
 
     tables.forEach((table) => {
-      setupTableResize(plugin, table as HTMLTableElement, ctx.sourcePath);
+      setupTableResize(plugin, table, ctx.sourcePath);
     });
   };
