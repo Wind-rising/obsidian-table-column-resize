@@ -40,6 +40,19 @@ function tableFingerprint(headerCells) {
   });
   return texts.join("|");
 }
+function getAvailableWidth(table) {
+  const tw = table.getBoundingClientRect().width;
+  if (tw > 0)
+    return tw;
+  const parent = table.parentElement;
+  if (parent) {
+    const pw = parent.getBoundingClientRect().width;
+    if (pw > 0)
+      return pw;
+    return parent.clientWidth;
+  }
+  return 0;
+}
 function setupTableResize(plugin, table, filePath) {
   var _a;
   if (table.hasAttribute("data-tcr"))
@@ -69,21 +82,29 @@ function setupTableResize(plugin, table, filePath) {
     headerCells[i].style.setProperty("min-width", `${widthPx}px`, "important");
     headerCells[i].style.setProperty("max-width", `${widthPx}px`, "important");
   };
-  let hasSavedWidths = false;
+  const savedWidths = new Array(colCount);
+  let savedSum = 0;
+  let savedCount = 0;
   for (let i = 0; i < colCount; i++) {
-    const key = `${fileKey}::${i}`;
-    const saved = plugin.settings.columnWidths[key];
+    const saved = plugin.settings.columnWidths[`${fileKey}::${i}`];
     if (saved !== void 0) {
-      applyWidth(i, saved);
-      hasSavedWidths = true;
+      savedWidths[i] = saved;
+      savedSum += saved;
+      savedCount++;
     }
   }
-  if (!hasSavedWidths) {
+  if (savedCount > 0) {
+    let scale = 1;
+    if (savedCount === colCount) {
+      const available = getAvailableWidth(table);
+      if (available > 0 && savedSum > available) {
+        scale = available / savedSum;
+      }
+    }
     for (let i = 0; i < colCount; i++) {
-      const cell = headerCells[i];
-      const w = cell.getBoundingClientRect().width;
-      if (w > 0)
-        applyWidth(i, w);
+      const w = savedWidths[i];
+      if (w !== void 0)
+        applyWidth(i, w * scale);
     }
   }
   for (let i = 0; i < colCount; i++) {
@@ -101,6 +122,11 @@ function attachDragBehavior(plugin, handle, cols, headerCells, colIndex, fileKey
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
+    for (let i = 0; i < colCount; i++) {
+      const w = headerCells[i].getBoundingClientRect().width;
+      if (w > 0)
+        applyWidth(i, w);
+    }
     const startX = e.clientX;
     const th = headerCells[colIndex];
     const startWidth = th.getBoundingClientRect().width;

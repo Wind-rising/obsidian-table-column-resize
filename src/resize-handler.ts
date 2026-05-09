@@ -14,6 +14,24 @@ function tableFingerprint(headerCells: NodeListOf<Element>): string {
 }
 
 /**
+ * Returns the width the table can occupy in its current container.
+ * Because CSS applies `table-layout: fixed; width: 100%` to [data-tcr]
+ * tables, the table's own rendered width — measured before we override
+ * any column widths — equals the container's content width.
+ */
+function getAvailableWidth(table: HTMLTableElement): number {
+  const tw = table.getBoundingClientRect().width;
+  if (tw > 0) return tw;
+  const parent = table.parentElement;
+  if (parent) {
+    const pw = parent.getBoundingClientRect().width;
+    if (pw > 0) return pw;
+    return parent.clientWidth;
+  }
+  return 0;
+}
+
+/**
  * Instruments a single <table> element with column-resize drag handles.
  *
  * @param plugin   - plugin instance (for settings + save)
@@ -69,25 +87,42 @@ export function setupTableResize(
     (headerCells[i] as HTMLElement).style.setProperty("max-width", `${widthPx}px`, "important");
   };
 
-  // Restore saved widths
-  let hasSavedWidths = false;
+  // Collect saved widths
+  const savedWidths: (number | undefined)[] = new Array(colCount);
+  let savedSum = 0;
+  let savedCount = 0;
   for (let i = 0; i < colCount; i++) {
-    const key = `${fileKey}::${i}`;
-    const saved = plugin.settings.columnWidths[key];
+    const saved = plugin.settings.columnWidths[`${fileKey}::${i}`];
     if (saved !== undefined) {
-      applyWidth(i, saved);
-      hasSavedWidths = true;
+      savedWidths[i] = saved;
+      savedSum += saved;
+      savedCount++;
     }
   }
 
-  // If no saved widths, initialize cols from actual rendered widths
-  if (!hasSavedWidths) {
+  if (savedCount > 0) {
+    // Scale saved widths down proportionally if their total exceeds the
+    // available container width. Without this, widths recorded in a wider
+    // context (e.g., editor view) overflow narrower contexts (e.g., PDF
+    // pages), and successive tables in PDF export progressively widen the
+    // print container.
+    let scale = 1;
+    if (savedCount === colCount) {
+      const available = getAvailableWidth(table);
+      if (available > 0 && savedSum > available) {
+        scale = available / savedSum;
+      }
+    }
     for (let i = 0; i < colCount; i++) {
-      const cell = headerCells[i] as HTMLElement;
-      const w = cell.getBoundingClientRect().width;
-      if (w > 0) applyWidth(i, w);
+      const w = savedWidths[i];
+      if (w !== undefined) applyWidth(i, w * scale);
     }
   }
+  // When no widths are saved, intentionally leave columns unsized so the
+  // CSS `table-layout: fixed; width: 100%` rule distributes them equally
+  // across the container — keeping the table responsive to its container
+  // (window resize, PDF page width) instead of locking it to a one-time
+  // measurement.
 
   // Add drag handles to header cells
   // (th position:relative and overflow:visible come from styles.css)
@@ -118,6 +153,14 @@ function attachDragBehavior(
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
+
+    // Freeze every column at its current rendered width before the drag
+    // begins. Otherwise dragging one column would let the CSS fixed-layout
+    // engine redistribute remaining space across the un-sized columns.
+    for (let i = 0; i < colCount; i++) {
+      const w = (headerCells[i] as HTMLElement).getBoundingClientRect().width;
+      if (w > 0) applyWidth(i, w);
+    }
 
     const startX = e.clientX;
     const th = headerCells[colIndex] as HTMLElement;
