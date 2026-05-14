@@ -13,19 +13,53 @@ table[data-tcr] th,
 table[data-tcr] td {
   overflow: visible;
   /* Long URLs / unspaced tokens must wrap inside fixed-width columns */
+  /* Body td has no plugin inline min-width; 0 avoids min-content forcing overflow. th may use inline min from resize (wins when set). */
+  min-width: 0 !important;
   overflow-wrap: anywhere;
   word-wrap: break-word; /* legacy alias */
+  word-break: break-word;
+  white-space: normal !important;
 }
 
-/* Live Preview: editor/link styles often use nowrap on anchors or cm-* spans */
+/*
+ * Live Preview: CM6 uses .cm-line with pre-wrap and high-specificity rules,
+ * so wrapping must be reasserted here. Inner wrappers can imply a wide
+ * min-content width; min-width/max-width lets the column width constrain text.
+ */
+table[data-tcr] th .cm-line,
+table[data-tcr] td .cm-line {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+/* LP: first block wrapper inside a cell (Obsidian / CM table widgets) */
+table[data-tcr] th > div,
+table[data-tcr] td > div {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Links: anchors + CM link/url spans (incl. a.cm-underline in external links) */
 table[data-tcr] th a,
 table[data-tcr] td a,
+table[data-tcr] th a.cm-underline,
+table[data-tcr] td a.cm-underline,
 table[data-tcr] th .cm-url,
 table[data-tcr] td .cm-url,
 table[data-tcr] th .cm-link,
-table[data-tcr] td .cm-link {
-  white-space: normal;
-  overflow-wrap: anywhere;
+table[data-tcr] td .cm-link,
+table[data-tcr] th .cm-linkText,
+table[data-tcr] td .cm-linkText,
+table[data-tcr] th .cm-hmd-internal-link,
+table[data-tcr] td .cm-hmd-internal-link {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 
 table[data-tcr] th {
