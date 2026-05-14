@@ -12,6 +12,20 @@ table[data-tcr] {
 table[data-tcr] th,
 table[data-tcr] td {
   overflow: visible;
+  /* Long URLs / unspaced tokens must wrap inside fixed-width columns */
+  overflow-wrap: anywhere;
+  word-wrap: break-word; /* legacy alias */
+}
+
+/* Live Preview: editor/link styles often use nowrap on anchors or cm-* spans */
+table[data-tcr] th a,
+table[data-tcr] td a,
+table[data-tcr] th .cm-url,
+table[data-tcr] td .cm-url,
+table[data-tcr] th .cm-link,
+table[data-tcr] td .cm-link {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 table[data-tcr] th {
