@@ -1,6 +1,6 @@
 {
   "name": "table-column-resize",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "scripts": {
     "build": "esbuild src/main.ts --bundle --external:obsidian --external:@codemirror/state --external:@codemirror/view --external:@codemirror/language --outfile=main.js --format=cjs --platform=node --target=es2018"
